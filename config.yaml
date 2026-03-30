@@ -1,0 +1,48 @@
+schedule:
+  # Standard cron expression. Examples:
+  #   "0 7 * * *"    — daily at 7 AM
+  #   "0 9 * * 1"    — every Monday at 9 AM
+  #   "0 8 * * 1,4"  — Monday and Thursday at 8 AM
+  cron: "0 7 * * *"
+
+locations:
+  onsite_allowed:
+    - "Albuquerque, NM"
+    - "Santa Fe, NM"
+
+salary:
+  floor_hourly: 20.0
+
+targets:
+  role_keywords:
+    dev:
+      - fullstack
+      - full stack
+      - frontend
+      - front end
+      - backend
+      - back end
+      - software engineer
+      - software developer
+      - web developer
+    it:
+      - help desk
+      - helpdesk
+      - service desk
+      - field technician
+      - it support
+      - desktop support
+      - system administrator
+      - sysadmin
+      - it technician
+
+web:
+  addr: ":8080"
+
+resumes:
+  dev: "materials/resumes/resume_dev.pdf"
+  it:  "materials/resumes/resume_it.pdf"
+
+profile:
+  linkedin_url: ""   # fill in before first run
+  github_url:   ""   # fill in before first run

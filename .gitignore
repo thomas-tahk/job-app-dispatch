@@ -1,0 +1,29 @@
+# Secrets
+.env
+
+# Database
+data/jobs.db
+
+# Personal materials — never commit
+materials/resumes/*
+!materials/resumes/.gitkeep
+materials/cover_letter_samples/*
+!materials/cover_letter_samples/.gitkeep
+
+# Go
+core/vendor/
+*.exe
+*.test
+core/job-app-dispatch
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.python-version
+
+# OS
+.DS_Store
+Thumbs.db

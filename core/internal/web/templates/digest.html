@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>job-app-dispatch — Review</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #1a1a1a; padding: 2rem; }
+    h1 { margin-bottom: 1.5rem; font-size: 1.4rem; }
+    .empty { color: #666; font-style: italic; }
+    .job-card {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1rem;
+      max-width: 800px;
+    }
+    .job-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; }
+    .job-title { font-weight: 600; font-size: 1.05rem; }
+    .job-company { color: #444; }
+    .score { font-size: 0.85rem; font-weight: 600; background: #e8f4fd; color: #1a6bb5; padding: 2px 8px; border-radius: 12px; }
+    .meta { font-size: 0.85rem; color: #555; margin: 0.4rem 0; }
+    .tag-relocation { background: #fff3cd; color: #856404; font-size: 0.78rem; padding: 2px 7px; border-radius: 10px; font-weight: 600; margin-left: 6px; }
+    .match-reason { font-size: 0.88rem; color: #333; margin: 0.6rem 0 0.9rem; font-style: italic; }
+    .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .btn { padding: 6px 16px; border: none; border-radius: 5px; cursor: pointer; font-size: 0.9rem; font-weight: 500; }
+    .btn-approve { background: #2d7d46; color: #fff; }
+    .btn-approve:hover { background: #246038; }
+    .btn-reject  { background: #e8e8e8; color: #333; }
+    .btn-reject:hover  { background: #d0d0d0; }
+    .btn-cover   { background: #fff; color: #333; border: 1px solid #ccc; }
+    .btn-cover:hover   { background: #f0f0f0; }
+  </style>
+</head>
+<body>
+  <h1>Job Review</h1>
+
+  {{if not .Jobs}}
+    <p class="empty">No new jobs to review.</p>
+  {{else}}
+    {{range .Jobs}}
+    <div class="job-card">
+      <div class="job-header">
+        <div>
+          <div class="job-title">
+            {{.Title}}
+            {{if .RequiresRelocation}}<span class="tag-relocation">RELOCATION REQUIRED</span>{{end}}
+          </div>
+          <div class="job-company">{{.Company}}</div>
+        </div>
+        <span class="score">{{printf "%.0f" (mulf .MatchScore 100)}}</span>
+      </div>
+      <div class="meta">
+        {{.Location}}
+        {{if .SalaryRaw}} &middot; {{.SalaryRaw}}{{end}}
+        &middot; {{.Source}}
+      </div>
+      {{if .MatchReason}}<div class="match-reason">{{.MatchReason}}</div>{{end}}
+      <div class="actions">
+        <form method="POST" action="/jobs/{{.ID}}/approve" style="display:inline">
+          <button class="btn btn-approve" type="submit">Approve</button>
+        </form>
+        <form method="POST" action="/jobs/{{.ID}}/reject" style="display:inline">
+          <button class="btn btn-reject" type="submit">Reject</button>
+        </form>
+        <a class="btn btn-cover" href="/jobs/{{.ID}}/cover">Edit Cover Letter</a>
+        <a class="btn btn-cover" href="{{.ApplyURL}}" target="_blank" rel="noopener">View Listing</a>
+      </div>
+    </div>
+    {{end}}
+  {{end}}
+</body>
+</html>
