@@ -58,7 +58,7 @@ func Score(job connector.ScrapedJob, resume models.Resume, cfg Config) Result {
 	// --- Dimension scores (0.0–1.0 each) ---
 	roleScore := scoreRoleAlignment(roleType, resume.RoleType)
 	salaryScore := scoreSalary(effectiveSalary, cfg.SalaryFloorHourly)
-	locationScore := scoreLocation(job)
+	locationScore := scoreLocation(job, cfg)
 	skillScore := scoreSkills(job.Description, resume.Skills)
 	seniorityScore := scoreSeniority(job.Title, job.Description) // soft, low weight
 
@@ -115,14 +115,17 @@ func scoreSalary(salaryMin, floor float64) float64 {
 	return ratio
 }
 
-func scoreLocation(job connector.ScrapedJob) float64 {
+func scoreLocation(job connector.ScrapedJob, cfg Config) float64 {
 	if job.IsRemote {
 		return 1.0
 	}
-	if job.RequiresRelocation {
-		return 0.4 // penalised but not excluded
+	lower := strings.ToLower(job.Location)
+	for _, allowed := range cfg.OnsiteAllowedLocations {
+		if strings.Contains(lower, strings.ToLower(allowed)) {
+			return 0.8 // local on-site/hybrid
+		}
 	}
-	return 0.8 // local on-site/hybrid
+	return 0.4 // requires relocation — penalised but not excluded
 }
 
 func scoreSkills(description, resumeSkillsJSON string) float64 {

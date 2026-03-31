@@ -19,6 +19,7 @@ type Submitter interface {
 // Field names match the Python Pydantic model for direct JSON round-tripping.
 type ScrapedJob struct {
 	ExternalID    string  `json:"external_id"`
+	Source        string  `json:"source"` // set by the Go runner from Scraper.Source()
 	Title         string  `json:"title"`
 	Company       string  `json:"company"`
 	Location      string  `json:"location"`

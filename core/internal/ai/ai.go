@@ -5,16 +5,16 @@ import (
 	"fmt"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/option"
 )
 
 // Client wraps the Anthropic SDK for cover letter generation and match rationale.
 type Client struct {
-	client *anthropic.Client
+	client anthropic.Client
 }
 
 func New(apiKey string) *Client {
-	c := anthropic.NewClient(anthropic.WithAPIKey(apiKey))
-	return &Client{client: &c}
+	return &Client{client: anthropic.NewClient(option.WithAPIKey(apiKey))}
 }
 
 // CoverLetterRequest carries all context needed to generate a tailored cover letter.
@@ -66,11 +66,11 @@ Do not use generic filler phrases. Do not start with "I am writing to apply for"
 	)
 
 	msg, err := c.client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_5SonnetLatest),
-		MaxTokens: anthropic.F(int64(1024)),
-		Messages: anthropic.F([]anthropic.MessageParam{
+		Model:     anthropic.ModelClaudeSonnet4_6,
+		MaxTokens: 1024,
+		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock(prompt)),
-		}),
+		},
 	})
 	if err != nil {
 		return "", fmt.Errorf("cover letter generation: %w", err)
@@ -93,17 +93,17 @@ Resume excerpt: %.500s`,
 	)
 
 	msg, err := c.client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_5SonnetLatest),
-		MaxTokens: anthropic.F(int64(100)),
-		Messages: anthropic.F([]anthropic.MessageParam{
+		Model:     anthropic.ModelClaudeSonnet4_6,
+		MaxTokens: 100,
+		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock(prompt)),
-		}),
+		},
 	})
 	if err != nil {
 		return "", fmt.Errorf("match rationale generation: %w", err)
 	}
 	if len(msg.Content) == 0 {
-		return "", ""
+		return "", nil
 	}
 	return msg.Content[0].Text, nil
 }

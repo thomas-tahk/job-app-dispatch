@@ -36,6 +36,9 @@ func (p *PythonScraper) Scrape(ctx context.Context) ([]ScrapedJob, error) {
 	if err := json.Unmarshal(out, &jobs); err != nil {
 		return nil, fmt.Errorf("scraper %s returned invalid JSON: %w", p.source, err)
 	}
+	for i := range jobs {
+		jobs[i].Source = p.source
+	}
 	return jobs, nil
 }
 

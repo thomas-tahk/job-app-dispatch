@@ -11,10 +11,13 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/thomas-tahk/job-app-dispatch/internal/ai"
+	"github.com/thomas-tahk/job-app-dispatch/internal/connector"
 	"github.com/thomas-tahk/job-app-dispatch/internal/db"
 	"github.com/thomas-tahk/job-app-dispatch/internal/discord"
 	"github.com/thomas-tahk/job-app-dispatch/internal/models"
+	"github.com/thomas-tahk/job-app-dispatch/internal/pipeline"
 	"github.com/thomas-tahk/job-app-dispatch/internal/scheduler"
+	"github.com/thomas-tahk/job-app-dispatch/internal/scorer"
 	"github.com/thomas-tahk/job-app-dispatch/internal/watcher"
 	"github.com/thomas-tahk/job-app-dispatch/internal/web"
 	"gopkg.in/yaml.v3"
@@ -25,9 +28,25 @@ type Config struct {
 	Schedule struct {
 		Cron string `yaml:"cron"`
 	} `yaml:"schedule"`
+	Locations struct {
+		OnsiteAllowed []string `yaml:"onsite_allowed"`
+	} `yaml:"locations"`
+	Salary struct {
+		FloorHourly float64 `yaml:"floor_hourly"`
+	} `yaml:"salary"`
+	Targets struct {
+		RoleKeywords struct {
+			Dev []string `yaml:"dev"`
+			IT  []string `yaml:"it"`
+		} `yaml:"role_keywords"`
+	} `yaml:"targets"`
 	Web struct {
 		Addr string `yaml:"addr"`
 	} `yaml:"web"`
+	Resumes struct {
+		Dev string `yaml:"dev"`
+		IT  string `yaml:"it"`
+	} `yaml:"resumes"`
 	Profile struct {
 		LinkedInURL string `yaml:"linkedin_url"`
 		GitHubURL   string `yaml:"github_url"`
@@ -68,11 +87,37 @@ func main() {
 	}
 	defer discordBot.Close()
 
-	aiClient := ai.New(os.Getenv("ANTHROPIC_API_KEY"))
+	runner := &pipeline.Runner{
+		DB: database,
+		Scrapers: []connector.Scraper{
+			connector.NewPythonScraper("linkedin", "../connectors/linkedin/scraper.py", "../config.yaml"),
+			connector.NewPythonScraper("indeed", "../connectors/indeed/scraper.py", "../config.yaml"),
+		},
+		Submitters: map[string]connector.Submitter{
+			"linkedin": connector.NewPythonSubmitter("linkedin", "../connectors/linkedin/submitter.py"),
+			"indeed":   connector.NewPythonSubmitter("indeed", "../connectors/indeed/submitter.py"),
+		},
+		AI:      ai.New(os.Getenv("ANTHROPIC_API_KEY")),
+		Discord: discordBot,
+		Config: pipeline.Config{
+			WebAddr:       cfg.Web.Addr,
+			LinkedInURL:   cfg.Profile.LinkedInURL,
+			GitHubURL:     cfg.Profile.GitHubURL,
+			DevResumePath: "../" + cfg.Resumes.Dev,
+			ITResumePath:  "../" + cfg.Resumes.IT,
+			SamplesDir:    "../materials/cover_letter_samples",
+			Scorer: scorer.Config{
+				SalaryFloorHourly:      cfg.Salary.FloorHourly,
+				OnsiteAllowedLocations: cfg.Locations.OnsiteAllowed,
+				DevKeywords:            cfg.Targets.RoleKeywords.Dev,
+				ITKeywords:             cfg.Targets.RoleKeywords.IT,
+			},
+		},
+	}
 
 	sched := scheduler.New()
 	if err := sched.AddJob("scrape", cfg.Schedule.Cron, func() {
-		runScrapeAndScore(database, aiClient, discordBot, cfg)
+		runner.Run(context.Background())
 	}); err != nil {
 		log.Fatalf("main: scheduler: %v", err)
 	}
@@ -92,7 +137,12 @@ func main() {
 		log.Fatalf("main: watcher start: %v", err)
 	}
 
-	server, err := web.New(database, cfg.Web.Addr)
+	server, err := web.New(
+		database,
+		cfg.Web.Addr,
+		runner.ProcessApproval,
+		runner.Submit,
+	)
 	if err != nil {
 		log.Fatalf("main: web server init: %v", err)
 	}
@@ -113,7 +163,7 @@ func main() {
 func parseAndStoreResume(database *gorm.DB, path string) {
 	out, err := exec.Command("python", "../scripts/parse_resume.py", path).Output()
 	if err != nil {
-		log.Printf("parseAndStoreResume: parse failed for %s: %v", path, err)
+		log.Printf("parseAndStoreResume: failed for %s: %v", path, err)
 		return
 	}
 	var result struct {
@@ -137,20 +187,5 @@ func parseAndStoreResume(database *gorm.DB, path string) {
 		Titles:     string(titlesJSON),
 	}
 	database.Where(models.Resume{Filename: result.Filename}).Assign(resume).FirstOrCreate(&resume)
-	log.Printf("parseAndStoreResume: stored resume %s", result.Filename)
-}
-
-// runScrapeAndScore is the main pipeline: scrape → filter → score → store → notify.
-// TODO: implement fully; currently a stub.
-func runScrapeAndScore(database *gorm.DB, aiClient *ai.Client, bot *discord.Bot, cfg Config) {
-	log.Println("pipeline: starting scrape run")
-	// TODO:
-	// 1. Run each connector's scraper subprocess
-	// 2. Deduplicate against DB (by ExternalID + Source)
-	// 3. Filter: salary, healthcare, location rules
-	// 4. Score each job
-	// 5. Generate match rationale via aiClient
-	// 6. Store new jobs in DB
-	// 7. Count new jobs, send Discord notification if > 0
-	log.Println("pipeline: scrape run complete (not yet implemented)")
+	log.Printf("parseAndStoreResume: stored %s", result.Filename)
 }

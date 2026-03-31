@@ -1,7 +1,7 @@
 # job-app-dispatch — Codebase Reference
 
 > Living document. Updated with every meaningful code change.
-> Last updated: initial scaffold.
+> Last updated: scrape pipeline, submission pipeline, web server wiring.
 
 ---
 
@@ -14,8 +14,11 @@
    - [Models](#models-coreinternalmodelsmodelgo)
    - [Database](#database-coreinternaldbdbgo)
    - [Connector Interface & Runner](#connector-interface--runner-coreinternalconnector)
+   - [Pipeline — Scrape](#pipeline-scrape-coreinternalpipelinepipelinego)
+   - [Pipeline — Submission](#pipeline-submission-coreinternalpipelinesubmissiongo)
+   - [Pipeline — Style Samples](#pipeline-style-samples-coreinternalpipelinesamplespy)
    - [Scorer](#scorer-coreinternalscorerscoreergo)
-   - [AI Client](#ai-client-coreinternalaim)
+   - [AI Client](#ai-client-coreinternalaiaigo)
    - [Scheduler](#scheduler-coreinternalschedulerschedulergo)
    - [Discord Bot](#discord-bot-coreinternaldiscorddiscordgo)
    - [Resume Watcher](#resume-watcher-coreinternalwatcherresumesgo)
@@ -199,6 +202,53 @@ Both capture stderr from the Python process and include it in the error message 
 
 ---
 
+### Pipeline — Scrape (`core/internal/pipeline/pipeline.go`)
+
+`Runner` owns all dependencies (DB, scrapers, submitters, AI client, Discord bot, config) and exposes two entry points used by the rest of the app.
+
+`Runner.Run(ctx)` is the main scrape cycle, triggered by the scheduler:
+
+1. Calls every registered `Scraper` subprocess — failures are logged and skipped, not fatal.
+2. **Deduplicates** against the DB using `ExternalID + Source`. Previously seen jobs are silently dropped.
+3. Loads the best-matching `Resume` record from the DB for each job (dev vs IT, based on title/description keywords).
+4. **Hard-filters** via `scorer.Score` — skips jobs with missing salary, below-floor salary, or no benefits info.
+5. **Scores** remaining jobs across role alignment, salary, location, skills, and seniority.
+6. **Location tagging**: on-site jobs outside the configured allowed cities get `RequiresRelocation = true` but are still stored.
+7. Calls `AI.GenerateMatchRationale` for each kept job — a one-liner digest blurb. Errors here are non-fatal.
+8. Persists new `Job` rows and Discord-notifies with the count.
+
+Helper functions (unexported): `deduplicate`, `pickResume`, `isAllowedLocation`.
+
+---
+
+### Pipeline — Submission (`core/internal/pipeline/submission.go`)
+
+Two methods on `Runner`:
+
+**`ProcessApproval(ctx, jobID) error`** — called by the web handler when the user clicks Approve:
+1. Loads job + matching resume from DB.
+2. Loads style samples from `materials/cover_letter_samples/`.
+3. Calls `AI.GenerateCoverLetter` with job details, resume text, samples, and profile links.
+4. Creates an `Application` record with the generated cover letter and the appropriate resume PDF path.
+5. Returns — submission is NOT triggered yet. User reviews the letter first.
+
+**`Submit(ctx, jobID)`** — called (in a goroutine) when the user clicks Submit Application:
+1. Loads job + application from DB.
+2. Looks up the registered `Submitter` for the job's source.
+3. Calls the submitter subprocess with `SubmitRequest` JSON via stdin.
+4. On success: updates `Application.SubmittedAt`, sets `Job.Status = submitted`, Discord-notifies.
+5. On failure: sets `Job.Status = failed`, saves failure reason, Discord-notifies with manual apply URL.
+
+`jobToScrapedJob` maps a stored `models.Job` back to `connector.ScrapedJob` for the submitter interface.
+
+---
+
+### Pipeline — Style Samples (`core/internal/pipeline/samples.go`)
+
+`LoadStyleSamples(dir)` reads all `.txt` and `.md` files from `materials/cover_letter_samples/` and returns their text. These are passed to `GenerateCoverLetter` as tone/voice reference. PDF cover letter samples are not parsed here; save them as `.txt` or `.md`.
+
+---
+
 ### Scorer (`core/internal/scorer/scorer.go`)
 
 `Score(job, resume, cfg)` returns a `Result` with a 0.0–1.0 score and a `ShouldSkip` flag.
@@ -224,12 +274,13 @@ Both capture stderr from the Python process and include it in the error message 
 
 ### AI Client (`core/internal/ai/ai.go`)
 
-Wraps the official `anthropic-sdk-go` client.
+Wraps `anthropic-sdk-go` v1.28.0.
 
-- `GenerateCoverLetter(ctx, req)` — builds a prompt that includes style sample cover letters (tone/voice reference), the job posting, resume text, and the user's LinkedIn/GitHub URLs. Calls `claude-3-5-sonnet-latest` with max 1024 tokens.
-- `GenerateMatchRationale(ctx, ...)` — produces a single sentence (≤20 words) explaining why a job matches, shown in the digest. Uses max 100 tokens.
+- `New(apiKey)` — creates a client using `option.WithAPIKey`. The `Client` struct holds an `anthropic.Client` value (not pointer — this is how the v1.x SDK works).
+- `GenerateCoverLetter(ctx, req)` — builds a prompt including style sample letters (tone/voice reference only), the job posting, resume text, and LinkedIn/GitHub URLs. Uses `ModelClaudeSonnet4_6`, max 1024 tokens.
+- `GenerateMatchRationale(ctx, ...)` — one sentence (≤20 words) explaining the match. Uses `ModelClaudeSonnet4_6`, max 100 tokens.
 
-Style samples come from files in `materials/cover_letter_samples/`. The prompt instructs Claude to match voice and tone but not reuse content verbatim.
+**SDK API shape (v1.28.0):** `MessageNewParams` takes plain Go values — no `F()` wrapper needed. Response content is accessed via `msg.Content[0].Text` (field on `ContentBlockUnion`). `WithAPIKey` lives in the `option` subpackage.
 
 ---
 
@@ -265,10 +316,13 @@ Chi HTTP router. Templates are embedded at compile time via `//go:embed template
 | Route | Handler | Description |
 |---|---|---|
 | `GET /` | `handleDigest` | Lists all `new` jobs sorted by score descending |
-| `POST /jobs/{id}/approve` | `handleApprove` | Sets status → `approved`; TODO: trigger cover letter gen + submission queue |
+| `POST /jobs/{id}/approve` | `handleApprove` | Calls `onApprove` (generates cover letter, creates Application), redirects to cover editor |
 | `POST /jobs/{id}/reject` | `handleReject` | Sets status → `rejected` |
-| `GET /jobs/{id}/cover` | `handleCoverView` | Renders cover letter editor for a job |
-| `POST /jobs/{id}/cover` | `handleCoverSave` | Saves edited cover letter to `applications` table |
+| `GET /jobs/{id}/cover` | `handleCoverView` | Renders cover letter editor |
+| `POST /jobs/{id}/cover` | `handleCoverSave` | Saves edited cover letter, stays on editor page |
+| `POST /jobs/{id}/submit` | `handleSubmit` | Saves cover letter, fires `onSubmit` in a goroutine, redirects to digest |
+
+`New()` accepts `onApprove` and `onSubmit` callbacks (wired to `pipeline.Runner` methods in `main.go`), keeping the web package free of pipeline imports. A `pct` template function converts 0.0–1.0 scores to 0–100 integers for display.
 
 **Templates:**
 - `digest.html` — job card list with Approve / Reject buttons and a link to the cover letter editor. Shows `[RELOCATION REQUIRED]` tag where applicable.
@@ -503,13 +557,15 @@ cd core && go run cmd/main.go
 | Project scaffold & interfaces | ✅ Complete |
 | Go models + DB | ✅ Complete |
 | Connector subprocess runner | ✅ Complete |
-| Scorer (hard filters + weighted score) | ✅ Skeleton — skills matching TODO |
-| AI client (cover letter + rationale) | ✅ Skeleton — needs testing |
+| Scorer (hard filters + weighted score) | ✅ Complete — skills matching TODO |
+| AI client (cover letter + rationale) | ✅ Complete — verified against SDK v1.28.0 |
 | Discord notifications | ✅ Complete |
-| Resume watcher + parser | ✅ Skeleton — skills/title extraction TODO |
-| Web UI (digest + cover editor) | ✅ Skeleton — approve needs pipeline wiring |
+| Resume watcher + parser | ✅ Complete — skills/title extraction TODO |
+| Scrape pipeline | ✅ Complete |
+| Submission pipeline (approval → cover letter → submit) | ✅ Complete |
+| Web UI (digest + cover editor + submit flow) | ✅ Complete |
 | Scheduler | ✅ Complete |
-| Scrape pipeline (`runScrapeAndScore`) | ⬜ TODO |
+| Entire module compiles (`go build ./...`) | ✅ Verified |
 | LinkedIn scraper | ⬜ TODO |
 | LinkedIn submitter | ⬜ TODO |
 | Indeed scraper | ⬜ TODO |

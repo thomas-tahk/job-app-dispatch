@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Edit Cover Letter — {{.Application.Job.Title}}</title>
+  <title>Cover Letter — {{.Application.Job.Title}}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #1a1a1a; padding: 2rem; }
@@ -13,36 +13,50 @@
     label { display: block; font-weight: 600; margin-bottom: 0.4rem; }
     textarea {
       width: 100%;
-      min-height: 420px;
+      min-height: 440px;
       font-family: Georgia, serif;
       font-size: 0.95rem;
-      line-height: 1.65;
+      line-height: 1.7;
       border: 1px solid #ccc;
       border-radius: 6px;
       padding: 1rem;
       resize: vertical;
     }
-    .actions { margin-top: 1rem; display: flex; gap: 0.5rem; }
-    .btn { padding: 8px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 0.9rem; font-weight: 500; }
-    .btn-save { background: #2d7d46; color: #fff; }
-    .btn-save:hover { background: #246038; }
-    .btn-back { background: #e8e8e8; color: #333; text-decoration: none; display: inline-flex; align-items: center; }
-    .btn-back:hover { background: #d0d0d0; }
+    .actions { margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+    .btn { padding: 8px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 0.9rem; font-weight: 500; text-decoration: none; display: inline-flex; align-items: center; }
+    .btn-save   { background: #444; color: #fff; }
+    .btn-save:hover   { background: #222; }
+    .btn-submit { background: #2d7d46; color: #fff; }
+    .btn-submit:hover { background: #246038; }
+    .btn-back   { background: #e8e8e8; color: #333; }
+    .btn-back:hover   { background: #d0d0d0; }
+    .divider { width: 1px; height: 28px; background: #ddd; margin: 0 4px; }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>{{.Application.Job.Title}} — {{.Application.Job.Company}}</h1>
-    <p class="subtitle">Review and edit the AI-generated cover letter before approving submission.</p>
+    <p class="subtitle">Edit the cover letter, then submit when ready.</p>
 
-    <form method="POST" action="/jobs/{{.Application.JobID}}/cover">
+    {{/* Both buttons post the same form — only the action URL differs. */}}
+    <form id="cover-form" method="POST" action="/jobs/{{.JobID}}/cover">
       <label for="cover_letter">Cover Letter</label>
       <textarea id="cover_letter" name="cover_letter">{{.Application.CoverLetter}}</textarea>
       <div class="actions">
         <button class="btn btn-save" type="submit">Save</button>
+        <div class="divider"></div>
+        <button class="btn btn-submit" type="button" onclick="submitApp()">Submit Application</button>
         <a class="btn btn-back" href="/">Back to Digest</a>
       </div>
     </form>
   </div>
+
+  <script>
+    function submitApp() {
+      var form = document.getElementById('cover-form');
+      form.action = '/jobs/{{.JobID}}/submit';
+      form.submit();
+    }
+  </script>
 </body>
 </html>
