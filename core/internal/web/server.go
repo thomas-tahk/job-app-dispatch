@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"os"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
@@ -64,6 +65,7 @@ func (s *Server) routes() {
 	s.router.Get("/jobs/{id}/cover", s.handleCoverView)
 	s.router.Post("/jobs/{id}/cover", s.handleCoverSave)
 	s.router.Post("/jobs/{id}/submit", s.handleSubmit)
+	s.router.Get("/jobs/{id}/resume-ready", s.handleResumeReady)
 }
 
 func (s *Server) Start() error {
@@ -103,7 +105,34 @@ func (s *Server) handleCoverView(w http.ResponseWriter, r *http.Request) {
 	s.templates.ExecuteTemplate(w, "cover_edit.html", map[string]any{
 		"Application": app,
 		"JobID":       id,
+		"HasDiff":     app.ResumeDiff != "",
 	})
+}
+
+// handleResumeReady reports whether the resume file has been modified since the diff was generated.
+// The cover letter page polls this to gate the "resume updated" submit button.
+func (s *Server) handleResumeReady(w http.ResponseWriter, r *http.Request) {
+	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
+	var app models.Application
+	if err := s.db.Where("job_id = ?", id).First(&app).Error; err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if app.DiffGeneratedAt == nil || app.ResumeFile == "" {
+		fmt.Fprint(w, `{"ready":false}`)
+		return
+	}
+	info, err := os.Stat(app.ResumeFile)
+	if err != nil {
+		fmt.Fprint(w, `{"ready":false}`)
+		return
+	}
+	if info.ModTime().After(*app.DiffGeneratedAt) {
+		fmt.Fprint(w, `{"ready":true}`)
+	} else {
+		fmt.Fprint(w, `{"ready":false}`)
+	}
 }
 
 // handleCoverSave persists edits to the cover letter.

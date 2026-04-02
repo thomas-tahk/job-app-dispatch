@@ -23,14 +23,53 @@
       resize: vertical;
     }
     .actions { margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
-    .btn { padding: 8px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 0.9rem; font-weight: 500; text-decoration: none; display: inline-flex; align-items: center; }
-    .btn-save   { background: #444; color: #fff; }
-    .btn-save:hover   { background: #222; }
-    .btn-submit { background: #2d7d46; color: #fff; }
-    .btn-submit:hover { background: #246038; }
-    .btn-back   { background: #e8e8e8; color: #333; }
-    .btn-back:hover   { background: #d0d0d0; }
+    .btn { padding: 8px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 0.9rem; font-weight: 500; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+    .btn-save      { background: #444; color: #fff; }
+    .btn-save:hover      { background: #222; }
+    .btn-submit    { background: #2d7d46; color: #fff; }
+    .btn-submit:hover    { background: #246038; }
+    .btn-submit:disabled { background: #aaa; cursor: not-allowed; }
+    .btn-skip      { background: #5a6a7a; color: #fff; }
+    .btn-skip:hover      { background: #445060; }
+    .btn-back      { background: #e8e8e8; color: #333; }
+    .btn-back:hover      { background: #d0d0d0; }
     .divider { width: 1px; height: 28px; background: #ddd; margin: 0 4px; }
+    .ready-badge { font-size: 0.8rem; color: #2d7d46; font-weight: 600; display: none; }
+
+    /* Resume diff section */
+    .diff-section { margin-top: 2.5rem; }
+    .diff-section h2 { font-size: 1rem; margin-bottom: 0.3rem; }
+    .diff-section .diff-note { font-size: 0.82rem; color: #666; margin-bottom: 1rem; }
+    .diff-box {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 1.2rem 1.4rem;
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+    .suggestion { margin-bottom: 1.4rem; padding-bottom: 1.4rem; border-bottom: 1px solid #eee; }
+    .suggestion:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+    .suggestion .section-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #888;
+      margin-bottom: 0.5rem;
+    }
+    .before-line, .after-line, .why-line {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.3rem;
+      font-family: monospace;
+    }
+    .before-line .tag { color: #c0392b; font-weight: 700; min-width: 3.5rem; }
+    .after-line  .tag { color: #27ae60; font-weight: 700; min-width: 3.5rem; }
+    .why-line    .tag { color: #2980b9; font-weight: 700; min-width: 3.5rem; font-family: system-ui; font-size: 0.82rem; }
+    .why-line         { font-family: system-ui; font-size: 0.82rem; color: #555; }
+    .before-line .text { color: #c0392b; }
+    .after-line  .text { color: #27ae60; }
   </style>
 </head>
 <body>
@@ -38,17 +77,33 @@
     <h1>{{.Application.Job.Title}} — {{.Application.Job.Company}}</h1>
     <p class="subtitle">Edit the cover letter, then submit when ready.</p>
 
-    {{/* Both buttons post the same form — only the action URL differs. */}}
+    {{/* Both submit buttons post the same form — only the action URL differs. */}}
     <form id="cover-form" method="POST" action="/jobs/{{.JobID}}/cover">
       <label for="cover_letter">Cover Letter</label>
       <textarea id="cover_letter" name="cover_letter">{{.Application.CoverLetter}}</textarea>
       <div class="actions">
         <button class="btn btn-save" type="submit">Save</button>
         <div class="divider"></div>
-        <button class="btn btn-submit" type="button" onclick="submitApp()">Submit Application</button>
+        {{if .HasDiff}}
+          <button id="btn-updated" class="btn btn-submit" type="button" disabled onclick="submitApp()">
+            Submit (resume updated)
+          </button>
+          <span id="ready-badge" class="ready-badge">resume change detected</span>
+          <button class="btn btn-skip" type="button" onclick="submitApp()">Skip tailoring</button>
+        {{else}}
+          <button class="btn btn-submit" type="button" onclick="submitApp()">Submit Application</button>
+        {{end}}
         <a class="btn btn-back" href="/">Back to Digest</a>
       </div>
     </form>
+
+    {{if .HasDiff}}
+    <div class="diff-section">
+      <h2>Resume Tailoring Suggestions</h2>
+      <p class="diff-note">Read-only. Apply changes manually to your resume file, then use "Submit (resume updated)" above. Or click "Skip tailoring" to submit as-is.</p>
+      <div class="diff-box" id="diff-box"></div>
+    </div>
+    {{end}}
   </div>
 
   <script>
@@ -57,6 +112,69 @@
       form.action = '/jobs/{{.JobID}}/submit';
       form.submit();
     }
+
+    {{if .HasDiff}}
+    // Render the raw diff text into styled suggestion blocks.
+    var rawDiff = {{.Application.ResumeDiff | js}};
+
+    function renderDiff(text) {
+      var box = document.getElementById('diff-box');
+      var blocks = text.split(/\n---\n/).map(function(b) { return b.trim(); }).filter(Boolean);
+      if (blocks.length === 0) {
+        box.textContent = text;
+        return;
+      }
+      blocks.forEach(function(block) {
+        var div = document.createElement('div');
+        div.className = 'suggestion';
+        var lines = block.split('\n');
+        lines.forEach(function(line) {
+          if (line.startsWith('SECTION:')) {
+            var lbl = document.createElement('div');
+            lbl.className = 'section-label';
+            lbl.textContent = line.replace(/^SECTION:\s*/, '');
+            div.appendChild(lbl);
+          } else if (line.startsWith('BEFORE:')) {
+            var row = document.createElement('div');
+            row.className = 'before-line';
+            row.innerHTML = '<span class="tag">before</span><span class="text">' + escHtml(line.replace(/^BEFORE:\s*/, '')) + '</span>';
+            div.appendChild(row);
+          } else if (line.startsWith('AFTER:')) {
+            var row = document.createElement('div');
+            row.className = 'after-line';
+            row.innerHTML = '<span class="tag">after</span><span class="text">' + escHtml(line.replace(/^AFTER:\s*/, '')) + '</span>';
+            div.appendChild(row);
+          } else if (line.startsWith('WHY:')) {
+            var row = document.createElement('div');
+            row.className = 'why-line';
+            row.innerHTML = '<span class="tag">why</span>' + escHtml(line.replace(/^WHY:\s*/, ''));
+            div.appendChild(row);
+          }
+        });
+        box.appendChild(div);
+      });
+    }
+
+    function escHtml(s) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    renderDiff(rawDiff);
+
+    // Poll resume-ready every 3 seconds to gate the "resume updated" submit button.
+    var pollInterval = setInterval(function() {
+      fetch('/jobs/{{.JobID}}/resume-ready')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.ready) {
+            document.getElementById('btn-updated').disabled = false;
+            document.getElementById('ready-badge').style.display = 'inline';
+            clearInterval(pollInterval);
+          }
+        })
+        .catch(function() {});
+    }, 3000);
+    {{end}}
   </script>
 </body>
 </html>

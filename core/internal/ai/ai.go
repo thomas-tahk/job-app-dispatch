@@ -81,6 +81,54 @@ Do not use generic filler phrases. Do not start with "I am writing to apply for"
 	return msg.Content[0].Text, nil
 }
 
+// GenerateResumeDiff produces targeted resume tailoring suggestions for a specific job.
+// Output is plain text in a structured SECTION/BEFORE/AFTER/WHY format for display in the UI.
+func (c *Client) GenerateResumeDiff(ctx context.Context, jobTitle, company, jobDescription, resumeText string) (string, error) {
+	prompt := fmt.Sprintf(`You are helping tailor a resume for a specific job application.
+
+Review the applicant's resume and the job posting. Identify 3–6 targeted, specific changes that would make the resume a stronger match — without fabricating experience or restructuring sections.
+
+Focus on:
+- Reordering bullet points to lead with the most relevant experience
+- Rewording existing bullets to mirror the job's language (same truth, better framing)
+- Adjusting the skills list order or emphasis
+- Tweaking the professional summary if one exists
+
+For each suggestion output exactly this format (including the separator line):
+
+SECTION: <section name>
+BEFORE: <original text or close paraphrase>
+AFTER:  <suggested replacement>
+WHY:    <one-line reason>
+
+---
+
+JOB POSTING:
+Title: %s
+Company: %s
+%s
+
+RESUME:
+%s`,
+		jobTitle, company, jobDescription, resumeText,
+	)
+
+	msg, err := c.client.Messages.New(ctx, anthropic.MessageNewParams{
+		Model:     anthropic.ModelClaudeSonnet4_6,
+		MaxTokens: 800,
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock(prompt)),
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("resume diff generation: %w", err)
+	}
+	if len(msg.Content) == 0 {
+		return "", fmt.Errorf("empty response from Claude")
+	}
+	return msg.Content[0].Text, nil
+}
+
 // GenerateMatchRationale produces a short one-liner explaining the match for the digest.
 func (c *Client) GenerateMatchRationale(ctx context.Context, jobTitle, company, jobDescription, resumeText string, score float64) (string, error) {
 	prompt := fmt.Sprintf(`In one sentence (max 20 words), explain why this job is a good match for this applicant.

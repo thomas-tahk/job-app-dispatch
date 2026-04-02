@@ -30,18 +30,44 @@ func (r *Runner) ProcessApproval(ctx context.Context, jobID uint) error {
 		log.Printf("submission: load style samples: %v (continuing without samples)", err)
 	}
 
-	// Generate the cover letter.
-	coverLetter, err := r.AI.GenerateCoverLetter(ctx, ai.CoverLetterRequest{
-		JobTitle:       job.Title,
-		Company:        job.Company,
-		JobDescription: job.Description,
-		ResumeText:     resume.ParsedText,
-		StyleSamples:   samples,
-		LinkedInURL:    r.Config.LinkedInURL,
-		GitHubURL:      r.Config.GitHubURL,
-	})
-	if err != nil {
-		return fmt.Errorf("generate cover letter: %w", err)
+	// Generate cover letter and resume diff concurrently.
+	type clResult struct {
+		text string
+		err  error
+	}
+	type rdResult struct {
+		text string
+		err  error
+	}
+	clCh := make(chan clResult, 1)
+	rdCh := make(chan rdResult, 1)
+
+	go func() {
+		text, err := r.AI.GenerateCoverLetter(ctx, ai.CoverLetterRequest{
+			JobTitle:       job.Title,
+			Company:        job.Company,
+			JobDescription: job.Description,
+			ResumeText:     resume.ParsedText,
+			StyleSamples:   samples,
+			LinkedInURL:    r.Config.LinkedInURL,
+			GitHubURL:      r.Config.GitHubURL,
+		})
+		clCh <- clResult{text, err}
+	}()
+
+	go func() {
+		text, err := r.AI.GenerateResumeDiff(ctx, job.Title, job.Company, job.Description, resume.ParsedText)
+		rdCh <- rdResult{text, err}
+	}()
+
+	cl := <-clCh
+	if cl.err != nil {
+		return fmt.Errorf("generate cover letter: %w", cl.err)
+	}
+
+	rd := <-rdCh
+	if rd.err != nil {
+		log.Printf("submission: resume diff generation failed (continuing without diff): %v", rd.err)
 	}
 
 	// Choose the correct resume PDF.
@@ -50,11 +76,15 @@ func (r *Runner) ProcessApproval(ctx context.Context, jobID uint) error {
 		resumeFile = r.Config.ITResumePath
 	}
 
+	now := time.Now()
+
 	// Create the Application record. Status stays "approved" until Submit is called.
 	app := models.Application{
-		JobID:       job.ID,
-		CoverLetter: coverLetter,
-		ResumeFile:  resumeFile,
+		JobID:           job.ID,
+		CoverLetter:     cl.text,
+		ResumeFile:      resumeFile,
+		ResumeDiff:      rd.text,
+		DiffGeneratedAt: &now,
 	}
 	if err := r.DB.Create(&app).Error; err != nil {
 		return fmt.Errorf("create application record: %w", err)

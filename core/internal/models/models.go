@@ -53,12 +53,14 @@ type Job struct {
 // Application tracks a single submission attempt for an approved job.
 type Application struct {
 	gorm.Model
-	JobID         uint
-	Job           Job
-	CoverLetter   string     // final version (after user edits)
-	ResumeFile    string     // path to PDF submitted
-	SubmittedAt   *time.Time
-	FailureReason string
+	JobID           uint
+	Job             Job
+	CoverLetter     string     // final version (after user edits)
+	ResumeFile      string     // path to PDF submitted
+	ResumeDiff      string     // AI-generated tailoring suggestions (plain text)
+	DiffGeneratedAt *time.Time // when the diff was generated; used to detect resume file updates
+	SubmittedAt     *time.Time
+	FailureReason   string
 }
 
 // Resume stores parsed resume data, keyed by filename.
