@@ -112,6 +112,8 @@ func (r *Runner) Run(ctx context.Context) {
 			ApplyURL:           raw.ApplyURL,
 			IsEasyApply:        raw.IsEasyApply,
 			RoleType:           result.RoleType,
+			Archetype:          result.Archetype,
+			LegitimacyTier:     result.LegitimacyTier,
 			MatchScore:         result.Score,
 			MatchReason:        rationale,
 			Status:             models.StatusNew,

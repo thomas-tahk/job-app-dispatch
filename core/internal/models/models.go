@@ -43,6 +43,8 @@ type Job struct {
 	ApplyURL           string
 	IsEasyApply        bool      // true if the platform handles the form (LinkedIn Easy Apply, Indeed Apply)
 	RoleType           RoleType
+	Archetype          string    // e.g. "fullstack", "backend", "helpdesk"
+	LegitimacyTier     string    // "high" | "caution" | "suspicious"
 	MatchScore         float64
 	MatchReason        string    // AI-generated one-liner for digest display
 	Status             JobStatus `gorm:"default:'new'"`
