@@ -1,6 +1,7 @@
 # Secrets & personal config
 .env
 config.yaml
+portals.yaml
 
 # Database
 data/jobs.db

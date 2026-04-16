@@ -23,7 +23,7 @@ func NewPythonScraper(source, scriptPath, configPath string) *PythonScraper {
 func (p *PythonScraper) Source() string { return p.source }
 
 func (p *PythonScraper) Scrape(ctx context.Context) ([]ScrapedJob, error) {
-	cmd := exec.CommandContext(ctx, "python", p.scriptPath, "--config", p.configPath)
+	cmd := exec.CommandContext(ctx, "python3", p.scriptPath, "--config", p.configPath)
 	out, err := cmd.Output()
 	if err != nil {
 		var stderr string
@@ -37,7 +37,11 @@ func (p *PythonScraper) Scrape(ctx context.Context) ([]ScrapedJob, error) {
 		return nil, fmt.Errorf("scraper %s returned invalid JSON: %w", p.source, err)
 	}
 	for i := range jobs {
-		jobs[i].Source = p.source
+		// Preserve source set by the Python script (e.g. per-company ATS slug).
+		// Fall back to the registered scraper name only when the script left it blank.
+		if jobs[i].Source == "" {
+			jobs[i].Source = p.source
+		}
 	}
 	return jobs, nil
 }

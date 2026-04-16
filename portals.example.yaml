@@ -1,0 +1,103 @@
+# Company portal configuration.
+# Copy this file to portals.yaml and add the companies you want to track.
+# portals.yaml is gitignored — it's your personal company list.
+#
+# Supported ATS platforms: greenhouse, ashby, lever
+#
+# The "slug" is the board identifier used in the ATS API URL:
+#   Greenhouse: https://boards-api.greenhouse.io/v1/boards/{slug}/jobs
+#   Ashby:      https://api.ashbyhq.com/posting-api/job-board/{slug}
+#   Lever:      https://api.lever.co/v0/postings/{slug}
+#
+# To find a slug: go to the company's careers page, check the URL or page source
+# for the ATS embed. For Greenhouse it's usually the company name in lowercase.
+# Verify slugs return data before adding them.
+
+companies:
+
+  # ── Greenhouse ──────────────────────────────────────────────────────────────
+  - name: "Cloudflare"
+    ats: "greenhouse"
+    slug: "cloudflare"
+
+  - name: "Stripe"
+    ats: "greenhouse"
+    slug: "stripe"
+
+  - name: "Notion"
+    ats: "greenhouse"
+    slug: "notion"
+
+  - name: "Discord"
+    ats: "greenhouse"
+    slug: "discord"
+
+  - name: "Figma"
+    ats: "greenhouse"
+    slug: "figma"
+
+  - name: "Brex"
+    ats: "greenhouse"
+    slug: "brex"
+
+  - name: "Coinbase"
+    ats: "greenhouse"
+    slug: "coinbase"
+
+  - name: "Duolingo"
+    ats: "greenhouse"
+    slug: "duolingo"
+
+  - name: "Reddit"
+    ats: "greenhouse"
+    slug: "reddit"
+
+  - name: "Shopify"
+    ats: "greenhouse"
+    slug: "shopify"
+
+  - name: "Plaid"
+    ats: "greenhouse"
+    slug: "plaid"
+
+  - name: "Twitch"
+    ats: "greenhouse"
+    slug: "twitch"
+
+  # ── Ashby ────────────────────────────────────────────────────────────────────
+  - name: "Linear"
+    ats: "ashby"
+    slug: "linear"
+
+  - name: "Retool"
+    ats: "ashby"
+    slug: "retool"
+
+  - name: "Vercel"
+    ats: "ashby"
+    slug: "vercel"
+
+  - name: "Vanta"
+    ats: "ashby"
+    slug: "vanta"
+
+  - name: "Anyscale"
+    ats: "ashby"
+    slug: "anyscale"
+
+  # ── Lever ────────────────────────────────────────────────────────────────────
+  - name: "Dropbox"
+    ats: "lever"
+    slug: "dropbox"
+
+  - name: "Zendesk"
+    ats: "lever"
+    slug: "zendesk"
+
+  - name: "Eventbrite"
+    ats: "lever"
+    slug: "eventbrite"
+
+  - name: "Lyft"
+    ats: "lever"
+    slug: "lyft"

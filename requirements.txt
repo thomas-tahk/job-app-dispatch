@@ -1,5 +1,5 @@
-playwright>=1.44.0
 pydantic>=2.0
 python-docx
 pdfplumber
 pyyaml
+requests>=2.32.0
