@@ -90,13 +90,13 @@ func main() {
 	runner := &pipeline.Runner{
 		DB: database,
 		Scrapers: []connector.Scraper{
-			connector.NewPythonScraper("linkedin", "../connectors/linkedin/scraper.py", "../config.yaml"),
-			connector.NewPythonScraper("indeed", "../connectors/indeed/scraper.py", "../config.yaml"),
+			// ATS API scraper: Greenhouse, Ashby, Lever (reads portals.yaml).
+			connector.NewPythonScraper("ats", "../connectors/ats/scraper.py", "../config.yaml"),
+			// Broad discovery: free job board APIs, no auth required.
+			connector.NewPythonScraper("remoteok", "../connectors/remoteok/scraper.py", "../config.yaml"),
+			connector.NewPythonScraper("arbeitnow", "../connectors/arbeitnow/scraper.py", "../config.yaml"),
 		},
-		Submitters: map[string]connector.Submitter{
-			"linkedin": connector.NewPythonSubmitter("linkedin", "../connectors/linkedin/submitter.py"),
-			"indeed":   connector.NewPythonSubmitter("indeed", "../connectors/indeed/submitter.py"),
-		},
+		Submitters: map[string]connector.Submitter{},
 		AI:      ai.New(os.Getenv("ANTHROPIC_API_KEY")),
 		Discord: discordBot,
 		Config: pipeline.Config{
@@ -142,6 +142,7 @@ func main() {
 		cfg.Web.Addr,
 		runner.ProcessApproval,
 		runner.Submit,
+		func() { runner.Run(context.Background()) },
 	)
 	if err != nil {
 		log.Fatalf("main: web server init: %v", err)
@@ -161,7 +162,7 @@ func main() {
 
 // parseAndStoreResume calls the Python resume parser and upserts the result in the DB.
 func parseAndStoreResume(database *gorm.DB, path string) {
-	out, err := exec.Command("python", "../scripts/parse_resume.py", path).Output()
+	out, err := exec.Command("python3", "../scripts/parse_resume.py", path).Output()
 	if err != nil {
 		log.Printf("parseAndStoreResume: failed for %s: %v", path, err)
 		return

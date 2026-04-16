@@ -21,8 +21,7 @@
     .job-title { font-weight: 600; font-size: 1.05rem; }
     .job-company { color: #444; margin-top: 2px; }
     .score { font-size: 0.85rem; font-weight: 600; background: #e8f4fd; color: #1a6bb5; padding: 2px 10px; border-radius: 12px; white-space: nowrap; }
-    .meta { font-size: 0.85rem; color: #555; margin: 0.4rem 0; }
-    .tag-relocation { background: #fff3cd; color: #856404; font-size: 0.78rem; padding: 2px 7px; border-radius: 10px; font-weight: 600; margin-left: 6px; }
+    .meta { font-size: 0.85rem; color: #555; margin: 0.4rem 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
     .match-reason { font-size: 0.88rem; color: #444; margin: 0.6rem 0 0.9rem; font-style: italic; }
     .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
     .btn { padding: 6px 16px; border: none; border-radius: 5px; cursor: pointer; font-size: 0.9rem; font-weight: 500; text-decoration: none; display: inline-flex; align-items: center; }
@@ -32,26 +31,45 @@
     .btn-reject:hover  { background: #d0d0d0; }
     .btn-secondary { background: #fff; color: #333; border: 1px solid #ccc; }
     .btn-secondary:hover { background: #f0f0f0; }
+
+    /* Tags */
+    .tag { font-size: 0.75rem; padding: 2px 8px; border-radius: 10px; font-weight: 600; white-space: nowrap; }
+    .tag-relocation  { background: #fff3cd; color: #856404; }
+    .tag-archetype   { background: #f0e8ff; color: #6b21a8; }
+    .tag-legit-high  { background: #d1fae5; color: #065f46; }
+    .tag-legit-caution    { background: #fef9c3; color: #713f12; }
+    .tag-legit-suspicious { background: #fee2e2; color: #991b1b; }
   </style>
 </head>
 <body>
-  <h1>Job Review</h1>
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; max-width:800px;">
+    <h1 style="margin:0;">Job Review</h1>
+    <form method="POST" action="/run">
+      <button class="btn btn-secondary" type="submit">Run Now</button>
+    </form>
+  </div>
+
+  {{if .Running}}
+  <p style="max-width:800px; margin-bottom:1rem; color:#555; font-size:0.9rem;">
+    Scrape triggered — new jobs will appear here in ~30–60 seconds. Refresh to check.
+  </p>
+  {{end}}
 
   {{if .Jobs}}
     {{range .Jobs}}
     <div class="job-card">
       <div class="job-header">
         <div>
-          <div class="job-title">
-            {{.Title}}
-            {{if .RequiresRelocation}}<span class="tag-relocation">RELOCATION REQUIRED</span>{{end}}
-          </div>
+          <div class="job-title">{{.Title}}</div>
           <div class="job-company">{{.Company}}</div>
         </div>
         <span class="score">{{pct .MatchScore}}</span>
       </div>
       <div class="meta">
-        {{.Location}}{{if .SalaryRaw}} &middot; {{.SalaryRaw}}{{end}} &middot; {{.Source}}
+        <span>{{.Location}}{{if .SalaryRaw}} &middot; {{.SalaryRaw}}{{end}} &middot; {{.Source}}</span>
+        {{if .RequiresRelocation}}<span class="tag tag-relocation">RELOCATION REQUIRED</span>{{end}}
+        {{if .Archetype}}<span class="tag tag-archetype">{{.Archetype}}</span>{{end}}
+        {{if .LegitimacyTier}}<span class="tag tag-legit-{{.LegitimacyTier}}">{{.LegitimacyTier}}</span>{{end}}
       </div>
       {{if .MatchReason}}<div class="match-reason">{{.MatchReason}}</div>{{end}}
       <div class="actions">

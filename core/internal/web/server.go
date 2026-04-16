@@ -28,6 +28,8 @@ type Server struct {
 	onApprove func(ctx context.Context, jobID uint) error
 	// onSubmit runs the actual form submission for an approved job (blocking).
 	onSubmit func(ctx context.Context, jobID uint)
+	// onRun triggers an immediate scrape cycle (same as the scheduled run).
+	onRun func()
 }
 
 func New(
@@ -35,6 +37,7 @@ func New(
 	addr string,
 	onApprove func(context.Context, uint) error,
 	onSubmit func(context.Context, uint),
+	onRun func(),
 ) (*Server, error) {
 	funcs := template.FuncMap{
 		// pct converts a 0.0–1.0 score to a 0–100 integer for display.
@@ -50,6 +53,7 @@ func New(
 		templates: tmpl,
 		onApprove: onApprove,
 		onSubmit:  onSubmit,
+		onRun:     onRun,
 	}
 	s.router = chi.NewRouter()
 	s.router.Use(middleware.Logger)
@@ -60,6 +64,7 @@ func New(
 
 func (s *Server) routes() {
 	s.router.Get("/", s.handleDigest)
+	s.router.Post("/run", s.handleRun)
 	s.router.Post("/jobs/{id}/approve", s.handleApprove)
 	s.router.Post("/jobs/{id}/reject", s.handleReject)
 	s.router.Get("/jobs/{id}/cover", s.handleCoverView)
@@ -76,7 +81,10 @@ func (s *Server) Start() error {
 func (s *Server) handleDigest(w http.ResponseWriter, r *http.Request) {
 	var jobs []models.Job
 	s.db.Where("status = ?", models.StatusNew).Order("match_score desc").Find(&jobs)
-	s.templates.ExecuteTemplate(w, "digest.html", map[string]any{"Jobs": jobs})
+	s.templates.ExecuteTemplate(w, "digest.html", map[string]any{
+		"Jobs":    jobs,
+		"Running": r.URL.Query().Get("running") == "1",
+	})
 }
 
 // handleApprove generates a cover letter for the job and redirects to the editor.
@@ -146,6 +154,14 @@ func (s *Server) handleCoverSave(w http.ResponseWriter, r *http.Request) {
 		Where("job_id = ?", id).
 		Update("cover_letter", r.FormValue("cover_letter"))
 	http.Redirect(w, r, fmt.Sprintf("/jobs/%d/cover", id), http.StatusSeeOther)
+}
+
+// handleRun triggers an immediate scrape cycle and redirects back to the digest.
+// The scrape runs in a goroutine — the page reloads instantly and new jobs
+// appear once the run completes (typically within 30–60 seconds).
+func (s *Server) handleRun(w http.ResponseWriter, r *http.Request) {
+	go s.onRun()
+	http.Redirect(w, r, "/?running=1", http.StatusSeeOther)
 }
 
 // handleSubmit saves the latest cover letter text, then triggers submission
