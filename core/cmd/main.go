@@ -143,6 +143,7 @@ func main() {
 		runner.ProcessApproval,
 		runner.Submit,
 		func() { runner.Run(context.Background()) },
+		runner.IngestURL,
 	)
 	if err != nil {
 		log.Fatalf("main: web server init: %v", err)

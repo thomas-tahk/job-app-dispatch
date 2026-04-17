@@ -30,6 +30,8 @@ type Server struct {
 	onSubmit func(ctx context.Context, jobID uint)
 	// onRun triggers an immediate scrape cycle (same as the scheduled run).
 	onRun func()
+	// onIngest fetches a single job URL and generates a cover letter immediately.
+	onIngest func(ctx context.Context, url string) (uint, error)
 }
 
 func New(
@@ -38,6 +40,7 @@ func New(
 	onApprove func(context.Context, uint) error,
 	onSubmit func(context.Context, uint),
 	onRun func(),
+	onIngest func(context.Context, string) (uint, error),
 ) (*Server, error) {
 	funcs := template.FuncMap{
 		// pct converts a 0.0–1.0 score to a 0–100 integer for display.
@@ -54,6 +57,7 @@ func New(
 		onApprove: onApprove,
 		onSubmit:  onSubmit,
 		onRun:     onRun,
+		onIngest:  onIngest,
 	}
 	s.router = chi.NewRouter()
 	s.router.Use(middleware.Logger)
@@ -65,6 +69,7 @@ func New(
 func (s *Server) routes() {
 	s.router.Get("/", s.handleDigest)
 	s.router.Post("/run", s.handleRun)
+	s.router.Post("/jobs/ingest", s.handleIngest)
 	s.router.Post("/jobs/{id}/approve", s.handleApprove)
 	s.router.Post("/jobs/{id}/reject", s.handleReject)
 	s.router.Get("/jobs/{id}/cover", s.handleCoverView)
@@ -154,6 +159,26 @@ func (s *Server) handleCoverSave(w http.ResponseWriter, r *http.Request) {
 		Where("job_id = ?", id).
 		Update("cover_letter", r.FormValue("cover_letter"))
 	http.Redirect(w, r, fmt.Sprintf("/jobs/%d/cover", id), http.StatusSeeOther)
+}
+
+// handleIngest fetches a single job URL, generates a cover letter, and
+// redirects the user straight to the cover letter editor.
+func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	rawURL := r.FormValue("url")
+	if rawURL == "" {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	jobID, err := s.onIngest(r.Context(), rawURL)
+	if err != nil {
+		http.Error(w, "Failed to ingest job: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/jobs/%d/cover", jobID), http.StatusSeeOther)
 }
 
 // handleRun triggers an immediate scrape cycle and redirects back to the digest.

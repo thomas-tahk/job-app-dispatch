@@ -49,6 +49,12 @@
     </form>
   </div>
 
+  <form method="POST" action="/jobs/ingest" style="max-width:800px; margin-bottom:1.5rem; display:flex; gap:0.5rem;">
+    <input type="url" name="url" placeholder="Paste a job URL to fast-track it..."
+           style="flex:1; padding:8px 12px; border:1px solid #ccc; border-radius:5px; font-size:0.9rem; outline:none;">
+    <button class="btn btn-approve" type="submit">Add Job</button>
+  </form>
+
   {{if .Running}}
   <p style="max-width:800px; margin-bottom:1rem; color:#555; font-size:0.9rem;">
     Scrape triggered — new jobs will appear here in ~30–60 seconds. Refresh to check.
