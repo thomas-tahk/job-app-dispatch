@@ -44,9 +44,12 @@
 <body>
   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; max-width:800px;">
     <h1 style="margin:0;">Job Review</h1>
-    <form method="POST" action="/run">
-      <button class="btn btn-secondary" type="submit">Run Now</button>
-    </form>
+    <div style="display:flex; gap:0.75rem; align-items:center;">
+      <a href="/history" style="font-size:0.9rem; color:#1a6bb5; text-decoration:none;">History</a>
+      <form method="POST" action="/run">
+        <button class="btn btn-secondary" type="submit">Run Now</button>
+      </form>
+    </div>
   </div>
 
   <form method="POST" action="/jobs/ingest" style="max-width:800px; margin-bottom:1.5rem; display:flex; gap:0.5rem;">

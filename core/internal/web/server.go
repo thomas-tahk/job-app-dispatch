@@ -68,6 +68,7 @@ func New(
 
 func (s *Server) routes() {
 	s.router.Get("/", s.handleDigest)
+	s.router.Get("/history", s.handleHistory)
 	s.router.Post("/run", s.handleRun)
 	s.router.Post("/jobs/ingest", s.handleIngest)
 	s.router.Post("/jobs/{id}/approve", s.handleApprove)
@@ -159,6 +160,54 @@ func (s *Server) handleCoverSave(w http.ResponseWriter, r *http.Request) {
 		Where("job_id = ?", id).
 		Update("cover_letter", r.FormValue("cover_letter"))
 	http.Redirect(w, r, fmt.Sprintf("/jobs/%d/cover", id), http.StatusSeeOther)
+}
+
+// historyEntry pairs a job with its application record (nil for rejected jobs).
+type historyEntry struct {
+	Job           models.Job
+	CoverLetter   string
+	FailureReason string
+	SubmittedAt   string // formatted date, empty if not submitted
+}
+
+// handleHistory renders a read-only log of all acted-on jobs.
+func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
+	var jobs []models.Job
+	s.db.Where("status IN ?", []string{
+		string(models.StatusSubmitted),
+		string(models.StatusFailed),
+		string(models.StatusRejected),
+		string(models.StatusManual),
+	}).Order("updated_at desc").Find(&jobs)
+
+	// Build a job_id → Application map for jobs that went through approval.
+	jobIDs := make([]uint, 0, len(jobs))
+	for _, j := range jobs {
+		jobIDs = append(jobIDs, j.ID)
+	}
+	var apps []models.Application
+	if len(jobIDs) > 0 {
+		s.db.Where("job_id IN ?", jobIDs).Find(&apps)
+	}
+	appByJobID := make(map[uint]models.Application, len(apps))
+	for _, a := range apps {
+		appByJobID[a.JobID] = a
+	}
+
+	entries := make([]historyEntry, 0, len(jobs))
+	for _, j := range jobs {
+		e := historyEntry{Job: j}
+		if app, ok := appByJobID[j.ID]; ok {
+			e.CoverLetter = app.CoverLetter
+			e.FailureReason = app.FailureReason
+			if app.SubmittedAt != nil {
+				e.SubmittedAt = app.SubmittedAt.Format("Jan 2, 2006")
+			}
+		}
+		entries = append(entries, e)
+	}
+
+	s.templates.ExecuteTemplate(w, "history.html", map[string]any{"Entries": entries})
 }
 
 // handleIngest fetches a single job URL, generates a cover letter, and
