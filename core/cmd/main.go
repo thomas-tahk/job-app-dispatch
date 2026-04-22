@@ -54,7 +54,7 @@ type Config struct {
 }
 
 func main() {
-	if err := godotenv.Load(); err != nil {
+	if err := godotenv.Load("../.env"); err != nil {
 		log.Println("main: no .env file, reading from environment")
 	}
 

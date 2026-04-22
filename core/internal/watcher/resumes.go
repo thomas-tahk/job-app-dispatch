@@ -3,6 +3,7 @@ package watcher
 import (
 	"context"
 	"log"
+	"os"
 	"path/filepath"
 
 	"github.com/fsnotify/fsnotify"
@@ -28,6 +29,21 @@ func NewResumeWatcher(dir string, onChanged func(path string)) (*ResumeWatcher, 
 func (r *ResumeWatcher) Start(ctx context.Context) error {
 	if err := r.w.Add(r.dir); err != nil {
 		return err
+	}
+	entries, err := os.ReadDir(r.dir)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		ext := filepath.Ext(e.Name())
+		if ext == ".pdf" || ext == ".docx" {
+			path := filepath.Join(r.dir, e.Name())
+			log.Printf("watcher: initial parse: %s", path)
+			r.onChanged(path)
+		}
 	}
 	go func() {
 		for {
